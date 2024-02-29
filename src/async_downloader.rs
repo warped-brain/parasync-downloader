@@ -76,17 +76,24 @@ pub struct DownloadTask {
     pub chunk_config: Option<ChunkConfig>,
     pub out_file: File,
 }
+
+#[derive(Debug)]
+pub enum ProgressEnum {
+    content_length(u64),
+    progres(u64),
+}
+
 pub struct AsyncDownloader<'a> {
     rt: &'a Runtime,
     task_rx: tokio::sync::mpsc::Receiver<DownloadTask>,
-    progress_channel: std::sync::mpsc::Sender<u64>,
+    progress_channel: tokio::sync::mpsc::Sender<ProgressEnum>,
     failed_sender: tokio::sync::mpsc::Sender<DownloadTask>,
 }
 impl<'a> AsyncDownloader<'a> {
     pub fn new(
         rt: &'a tokio::runtime::Runtime,
         task_rx: tokio::sync::mpsc::Receiver<DownloadTask>,
-        progress_channel: std::sync::mpsc::Sender<u64>,
+        progress_channel: tokio::sync::mpsc::Sender<ProgressEnum>,
         failed_sender: tokio::sync::mpsc::Sender<DownloadTask>,
     ) -> Self {
         Self {
@@ -129,7 +136,13 @@ impl<'a> AsyncDownloader<'a> {
         task: Arc<DownloadTask>,
     ) -> Result<(), AsyncErrors> {
         if (task).chunk_config.is_some() {
-            chunk_downloader(task.clone(), None, self.failed_sender.clone()).await;
+            chunk_downloader(
+                task.clone(),
+                None,
+                self.failed_sender.clone(),
+                self.progress_channel.clone(),
+            )
+            .await;
         }
         // Get content length
         let client = reqwest::Client::new();
@@ -139,10 +152,15 @@ impl<'a> AsyncDownloader<'a> {
             Some(l) => Ok(l),
             None => Err(AsyncErrors::RangesUnsupported),
         };
+        //println!("{:?}", &response);
         let length = match length.unwrap().to_str().unwrap().parse::<u64>() {
             Ok(l) => l,
             Err(_) => return Err(AsyncErrors::ParseInt),
         };
+        self.progress_channel
+            .send(ProgressEnum::content_length(length))
+            .await
+            .unwrap();
 
         //
 
@@ -154,16 +172,18 @@ impl<'a> AsyncDownloader<'a> {
         println!("starting download...");
         let r_iter = PartialRangeIter::new(0, length - 1, task.chunk_size as u32).unwrap();
         for (i, range) in r_iter.enumerate() {
-            println!("{:?}", connection_limit.available_permits());
+            //println!("{:?}", connection_limit.available_permits());
             let task = task.clone();
             let failed_sender = self.failed_sender.clone();
             let chunk_config = ChunkConfig {
                 bytes_range: [range.0, range.1],
                 i,
             };
+            let p_c = self.progress_channel.clone();
             let permit = connection_limit.clone().acquire_owned().await.unwrap();
             handles.push(self.rt.spawn(async move {
-                chunk_downloader(task.clone(), Some(chunk_config), failed_sender.clone()).await;
+                chunk_downloader(task.clone(), Some(chunk_config), failed_sender.clone(), p_c)
+                    .await;
                 drop(permit);
             }));
             //println!("chunk :{i}");
@@ -171,7 +191,7 @@ impl<'a> AsyncDownloader<'a> {
 
         for handle in handles {
             tokio::join!(handle);
-            println!("joining");
+            //println!("joining");
         }
         println!("finished downloading");
         self.task_rx.close();
@@ -188,6 +208,7 @@ pub async fn chunk_downloader(
     task: Arc<DownloadTask>,
     chunk_config: Option<ChunkConfig>,
     failed_sender: tokio::sync::mpsc::Sender<DownloadTask>,
+    progress_sender: tokio::sync::mpsc::Sender<ProgressEnum>,
 ) {
     if let Some(chunk_config) = chunk_config {
         // original chunk download
@@ -206,13 +227,18 @@ pub async fn chunk_downloader(
                     //let chunk = response.bytes().await.unwrap();
                     task.out_file.write_at(chunk.as_ref(), f_start + n);
                     n += chunk.len() as u64;
-                    if n < 100000 || n > 900000 {
-                        println!(
-                            "chunk {} n:{n} done {:?}",
-                            &chunk_config.i,
-                            &chunk_config.header_value()
-                        );
-                    }
+                    progress_sender
+                        .send(ProgressEnum::progres(chunk.len() as u64))
+                        .await;
+                    // println!("sent progress");
+
+                    // if n < 100000 || n > 900000 {
+                    //     // println!(
+                    //     //     "chunk {} n:{n} done {:?}",
+                    //     //     &chunk_config.i,
+                    //     //     &chunk_config.header_value()
+                    //     // );
+                    // }
                 }
             }
             Err(_) => {
@@ -243,7 +269,7 @@ pub async fn chunk_downloader(
                 while let Some(chunk) = response.chunk().await.unwrap() {
                     task.out_file.write_at(chunk.as_ref(), f_start + n);
 
-                    println!("failed chunk{} n:{n} done", &chunk_config.i);
+                    // println!("failed chunk{} n:{n} done", &chunk_config.i);
                 }
             }
             Err(a) => {
