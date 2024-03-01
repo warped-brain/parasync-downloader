@@ -20,20 +20,17 @@ use ::humantime::format_duration;
 
 fn main() {
     std::env::set_var("RUST_BACKTRACE", "1");
-    let url = "https://mirror.alwyzon.net/archlinux/iso/2024.02.01/archlinux-2024.02.01-x86_64.iso"
-        .to_string();
-    //let url = std::env::args().nth(1).unwrap();
-    let out_file = "ubu.iso".to_string();
-    //let out_file = std::env::args().nth(2).unwrap();
+    // let url = "https://mirror.alwyzon.net/archlinux/iso/2024.02.01/archlinux-2024.02.01-x86_64.iso"
+    //     .to_string();
+    let url = std::env::args().nth(1).unwrap();
+    // let out_file = "ubu.iso".to_string();
+    let out_file = std::env::args().nth(2).unwrap();
     let out_file = OpenOptions::new()
         .write(true)
         .create(true)
         .open(out_file)
         .unwrap();
     println!("Async Download Time: ");
-    let mut downloaded = 0;
-    let total_size = 91231231;
-
     let i = Instant::now();
     let (mut task_sx, mut task_rx) = tokio::sync::mpsc::channel::<DownloadTask>(5);
     let (mut progress_sx, mut progress_rx) =
