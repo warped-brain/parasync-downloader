@@ -1,4 +1,3 @@
-
 use reqwest::header::{CONTENT_LENGTH, RANGE};
 use reqwest::{Response, StatusCode};
 
@@ -10,7 +9,7 @@ use std::usize;
 
 use tokio::runtime::Runtime;
 
-use tokio::sync::{Semaphore};
+use tokio::sync::Semaphore;
 #[derive(Debug)]
 pub enum AsyncErrors {
     InvalidChunkSize,
@@ -104,10 +103,10 @@ impl<'a> AsyncDownloader<'a> {
         }
     }
     pub async fn get_tasks(&mut self) {
-        println!("Waitint for tasks");
+        // println!("Waitint for tasks");
         while let Some(task) = self.task_rx.recv().await {
             let task = Arc::new(task);
-            println!("received task {:?}", *task);
+            // println!("received task {:?}", *task);
             self.async_downloadtask_handler(task.clone()).await;
         }
     }
@@ -121,7 +120,7 @@ impl<'a> AsyncDownloader<'a> {
                 if chunk_download_possible {
                     self.async_download_url_chunks(task.clone()).await;
                 } else {
-                    println!("Serial Download");
+                    println!("Only Serial Donwload available.");
                     // self.async_serial_download(&task)
                 }
             }

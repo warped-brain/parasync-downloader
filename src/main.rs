@@ -1,5 +1,3 @@
-
-
 use indicatif::{ProgressBar, ProgressState, ProgressStyle};
 use parasync_downloader::async_downloader::{AsyncDownloader, DownloadTask, ProgressEnum};
 use std::{
@@ -8,8 +6,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use std::{fmt::Write};
-
+use std::fmt::Write;
 
 use ::humantime::format_duration;
 
@@ -47,7 +44,7 @@ fn main() {
         .build()
         .expect("Tokio Runtime");
     task_sx.blocking_send(downloadtask);
-    println!("Started Thread");
+    // println!("Started Thread");
 
     std::thread::spawn(|| {
         let rtc = tokio::runtime::Builder::new_current_thread()
@@ -59,11 +56,11 @@ fn main() {
     });
 
     let mut downloader = AsyncDownloader::new(&rt, task_rx, progress_sx.clone(), task_sx);
-    println!("Finished");
+    // println!("Finished");
     rt.block_on(downloader.get_tasks());
 
     // download_url_chunks(&url.to_string(), &out_file.to_string(), 100000_u32);
-    println!("Time: {:?}", i.elapsed());
+    println!("Donwload finished in: {:?}", i.elapsed());
     // println!("Sync Download Time: ");
     //
     // let i = Instant::now();
@@ -98,7 +95,7 @@ pub async fn update_prog(mut progress_rx: tokio::sync::mpsc::Receiver<ProgressEn
             parasync_downloader::async_downloader::ProgressEnum::progres(_) => {}
         }
     }
-    while let prog = progress_rx.recv().await.unwrap() {
+    while let Some(prog) = progress_rx.recv().await {
         // println!("Recied Prog");
         match prog {
             parasync_downloader::async_downloader::ProgressEnum::content_length(_) => {}
