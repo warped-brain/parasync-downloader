@@ -1,8 +1,8 @@
-use reqwest::header::{HeaderValue, CONTENT_LENGTH, RANGE};
+use reqwest::header::{CONTENT_LENGTH, RANGE};
 use reqwest::StatusCode;
 use std::fs::File;
-use std::io::{self, Read};
-use std::{fs::OpenOptions, io::Write};
+use std::io::{Read};
+use std::{io::Write};
 
 #[derive(Debug)]
 pub enum SyncErrors {
@@ -59,7 +59,7 @@ pub fn download_url(url: &String, out_file: &String) -> Result<(), SyncErrors> {
             );
             Ok(())
         }
-        Err(e) => Err(SyncErrors::REQ_FETCH_ERROR),
+        Err(_e) => Err(SyncErrors::REQ_FETCH_ERROR),
     }
 }
 pub fn download_url_chunks(
@@ -81,10 +81,10 @@ pub fn download_url_chunks(
     };
 
     println!("starting download...");
-    let mut r_iter = PartialRangeIter::new(0, length - 1, chunk_size).unwrap();
+    let r_iter = PartialRangeIter::new(0, length - 1, chunk_size).unwrap();
     for range in r_iter {
         println!("range {:?}", &range);
-        let mut response = match client.get(url).header(RANGE, range).send() {
+        let response = match client.get(url).header(RANGE, range).send() {
             Ok(r) => r,
             Err(_) => {
                 return Err(SyncErrors::REQ_FETCH_ERROR);

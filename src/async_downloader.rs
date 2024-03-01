@@ -1,16 +1,16 @@
-use bytes::Bytes;
-use reqwest::header::{HeaderValue, CONTENT_LENGTH, RANGE};
+
+use reqwest::header::{CONTENT_LENGTH, RANGE};
 use reqwest::{Response, StatusCode};
-use std::borrow::Borrow;
+
 use std::fs::File;
-use std::io::{self, Read};
+
 use std::os::unix::fs::FileExt;
 use std::sync::Arc;
 use std::usize;
-use std::{fs::OpenOptions, io::Write};
+
 use tokio::runtime::Runtime;
-use tokio::sync::mpsc::{self, Receiver, Sender};
-use tokio::sync::{Mutex, Semaphore};
+
+use tokio::sync::{Semaphore};
 #[derive(Debug)]
 pub enum AsyncErrors {
     InvalidChunkSize,
@@ -272,7 +272,7 @@ pub async fn chunk_downloader(
                     // println!("failed chunk{} n:{n} done", &chunk_config.i);
                 }
             }
-            Err(a) => {
+            Err(_a) => {
                 let task: DownloadTask = DownloadTask {
                     chunk_size: task.chunk_size,
                     url: task.url.clone(),

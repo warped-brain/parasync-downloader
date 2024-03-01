@@ -1,49 +1,48 @@
-use bytes::Bytes;
-use core::time;
+
+
 use indicatif::{ProgressBar, ProgressState, ProgressStyle};
 use parasync_downloader::async_downloader::{AsyncDownloader, DownloadTask, ProgressEnum};
 use std::{
     fs::OpenOptions,
-    ops::AddAssign,
     sync::Arc,
-    thread::{self, JoinHandle, Thread},
     time::{Duration, Instant},
 };
 
-use std::{cmp::min, fmt::Write};
-use tokio::{
-    runtime::{Handle, Runtime},
-    sync::Mutex,
-};
+use std::{fmt::Write};
+
 
 use ::humantime::format_duration;
 
 fn main() {
-    std::env::set_var("RUST_BACKTRACE", "1");
+    // std::env::set_var("RUST_BACKTRACE", "1");
     // let url = "https://mirror.alwyzon.net/archlinux/iso/2024.02.01/archlinux-2024.02.01-x86_64.iso"
     //     .to_string();
     let url = std::env::args().nth(1).unwrap();
     // let out_file = "ubu.iso".to_string();
     let out_file = std::env::args().nth(2).unwrap();
+    let out_file = std::path::Path::new(&out_file);
+    if out_file.exists() {
+        std::fs::remove_file(out_file);
+    };
     let out_file = OpenOptions::new()
         .write(true)
         .create(true)
         .open(out_file)
         .unwrap();
-    println!("Async Download Time: ");
+    // println!("Async Download Time: ");
     let i = Instant::now();
-    let (mut task_sx, mut task_rx) = tokio::sync::mpsc::channel::<DownloadTask>(5);
-    let (mut progress_sx, mut progress_rx) =
+    let (task_sx, task_rx) = tokio::sync::mpsc::channel::<DownloadTask>(5);
+    let (progress_sx, progress_rx) =
         tokio::sync::mpsc::channel::<parasync_downloader::async_downloader::ProgressEnum>(10);
     let downloadtask = DownloadTask {
-        chunk_size: 10_000_000,
+        chunk_size: 20_000_000,
         url: Arc::new(url),
-        multi_connection: 5,
+        multi_connection: 3,
         chunk_config: None,
         out_file: out_file,
     };
     let rt = tokio::runtime::Builder::new_multi_thread()
-        .worker_threads(5)
+        .worker_threads(3)
         .enable_all()
         .build()
         .expect("Tokio Runtime");
@@ -108,7 +107,7 @@ pub async fn update_prog(mut progress_rx: tokio::sync::mpsc::Receiver<ProgressEn
                 pb.set_style(ProgressStyle::with_template("{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} ({eta}@{mbps})")
         .unwrap()
         .with_key("eta", |state: &ProgressState, w: &mut dyn Write| write!(w, "{}", format_duration(Duration::from_secs(state.eta().as_secs()))).unwrap())
-                    .with_key("mbps", move  |state: &ProgressState, w: &mut dyn Write| {write!(w, "{:.2}MBps", speed).unwrap();})
+                    .with_key("mbps", move  |_state: &ProgressState, w: &mut dyn Write| {write!(w, "{:.2}MBps", speed).unwrap();})
         .progress_chars("#>-"));
                 if e_tick.elapsed() >= Duration::from_secs(1) {
                     e_tick = tokio::time::Instant::now();
@@ -117,7 +116,7 @@ pub async fn update_prog(mut progress_rx: tokio::sync::mpsc::Receiver<ProgressEn
                     last_downloaded = 0.0;
                 };
                 last_downloaded += n as f64;
-                downloaded += (n as f64);
+                downloaded += n as f64;
                 pb.set_position(downloaded as u64);
             }
         }
